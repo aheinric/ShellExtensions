@@ -1,0 +1,4 @@
+*.o     # Relocatable objects
+*.so    # Shared objects
+*.a     # Static libraries
+*.exe   # Executables
