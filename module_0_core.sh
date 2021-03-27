@@ -43,3 +43,49 @@ argdir() {
   fi
   return 0
 }
+
+### expandenv str [all]: Expand environment variables in a string.
+###    - arg str:   String possibly containing expandable variables.
+###    - arg all: Optional flag; if non-empty, also replace local shell variables.
+###    - Outcome: Echoes expanded version of str to stdout.
+###        - Looks for strings of the pattern $name.
+###        - If 'name' matches a variable, replace '$name' with the variable's value.
+###        - If 'name' does not match, do nothing.
+###    - NOTE: The "easy" way to do this is $(eval "echo \"$str\"").
+###        - As you can imagine, the easy way is a terrible idea.
+###    - TODO: The code for getting the variable name/value pairs isn't perfect.
+###        - It won't handle newlines or quoted strings correctly.
+###        - This won't break the parser, but some variables may not appear as desired.
+expandenv() {
+  local str="$1"
+  if [ "$2" == "" ]; then
+    # If we did not specify 'all', only use environment variables.
+    local var_cmd='printenv'
+  else
+    # Otherwise, use all currently-set variables.
+    local var_cmd='eval (set -o posix ; set)'
+  fi
+  
+  sed_cmd=""
+  while read -r v; do
+    # Variables are printed as "name=value"
+    # If we see no equals, skip the line.
+    echo "$v" | grep "=" > /dev/null || continue 
+
+    # Extract the name/value pair from the line.
+    local name=$(echo "$v" | sed -E 's#^([A-Za-z0-9_]+)[=].*#\1#')
+    local value=$(echo "$v" | sed -E 's#^[A-Za-z0-9_]+[=](.*)#\1#')
+
+    # Create a sed command to replace '$name' with 'value'
+    local tmp_cmd="s#[\$]$name#$value#g"
+
+    if [ "$sed_cmd" == '' ]; then
+      # If our global sed command is empty, just drop in tmp_cmd.
+      local sed_cmd="$tmp_cmd"
+    else
+      # Otherwise, join with ';'
+      local sed_cmd="$sed_cmd; $tmp_cmd"
+    fi 
+  done< <($var_cmd)
+  echo "$str" | sed -E "$sed_cmd"
+}
